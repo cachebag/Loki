@@ -1,3 +1,5 @@
+# Loki 🟢
+
 #### Loki allows developers to step through their repository history and enter a virtual environment at any point in their repo's lifetime in order to test previous features, replicate bugs, or simply revert to old versions without the complexity of git commands or compromising the current state of your project. 
 
 #### How it works:
