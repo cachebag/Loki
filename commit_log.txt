@@ -1,0 +1,3 @@
+Date: 2024-07-19, Message: Layed out commit history, rendered terminal screen and nav options , Full Hash: 64171c390585d4d174b4e15dc137ec70fe140515, Author: akrm al-hakimi
+Date: 2024-07-19, Message: Initial Commit , Full Hash: 8a0dbf6d2c14a5d643129f4e99f97c952d7f643f, Author: akrm al-hakimi
+Date: 2024-07-19, Message: Initial commit, Full Hash: e26bf4672d561ad43f3dbd856d876b107ddb95d8, Author: akrm (uhcrum)
