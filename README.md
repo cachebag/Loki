@@ -39,5 +39,5 @@ make
 ```
 
 # Usage
-To run Loki, move it to your project of choice and type ```shell ./loki ``` in your terminal. Navigate through your project's commit history, select your desired commit, and pick your editor of choice. One your environment opens up, you are now open to make changes within the editor or run your code. Once finished, save your changes and exit back to the main branch where the temp branch created by Loki will be deleted and you can continue working on your project as if nothing changed.
+To run Loki, move it to your project of choice and type ```./loki ``` in your terminal. Navigate through your project's commit history, select your desired commit, and pick your editor of choice. One your environment opens up, you are now open to make changes within the editor or run your code. Once finished, save your changes and exit back to the main branch where the temp branch created by Loki will be deleted and you can continue working on your project as if nothing changed.
 
