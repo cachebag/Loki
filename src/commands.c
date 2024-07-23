@@ -28,15 +28,15 @@ void sanitize_message(char *message, size_t size) {
     }
 }
 
-const char *editor_names[] = {"VSCode", "Vim", "Neovim", "Sublime"};
-const char *editor_commands[] = {"code", "vim", "nvim", "subl"};
+const char *editor_names[] = {"VSCode", "Vim", "Neovim"};
+const char *editor_commands[] = {"/usr/local/bin/code", "/opt/homebrew/bin/vim", "/opt/homebrew/bin/nvim"};
 
 int prompt_editor_selection() {
     int ch, row = 0;
     while (1) {
         clear();
         center_text(0, "Select an Editor");
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; 3; i++) {
             if (i == row) attron(A_REVERSE);
             mvprintw(i + 2, 0, "%s", editor_names[i]);
             if (i == row) attroff(A_REVERSE);
@@ -48,7 +48,7 @@ int prompt_editor_selection() {
                 if (row > 0) row--;
                 break;
             case KEY_DOWN:
-                if (row < 3) row++;
+                if (row < 2) row++;
                 break;
             case 10:  // Enter key
                 return row;
@@ -58,13 +58,15 @@ int prompt_editor_selection() {
 
 int check_editor_installed(const char *editor_command) {
     char check_command[256];
-    snprintf(check_command, sizeof(check_command), "which %s", editor_command);
+    snprintf(check_command, sizeof(check_command), "command -v %s", editor_command);
+    printf("Running check command: %s\n", check_command); // Debug print
     FILE *fp = popen(check_command, "r");
     if (fp == NULL) {
         return 0;  // popen failed
     }
     int found = (fgetc(fp) != EOF);
     pclose(fp);
+    printf("Editor %s found: %d\n", editor_command, found); // Debug print
     return found;
 }
 
@@ -77,19 +79,40 @@ void open_in_editor(const char *editor_command, const char *commit_hash) {
         return;
     }
 
+    // Stash local changes
+    system("git stash -u");
+
+    // Create a temporary worktree
+    char temp_dir[] = "/tmp/loki_XXXXXX";
+    mkdtemp(temp_dir);
+
     char command[256];
-    snprintf(command, sizeof(command), "git checkout %s && %s .", commit_hash, editor_command);
-    endwin();  // End ncurses window before running command
+    snprintf(command, sizeof(command), "git worktree add %s %s", temp_dir, commit_hash);
     int result = system(command);
     if (result != 0) {
         endwin();
+        printf("Error: Could not create worktree for the commit. Ensure the commit hash is correct.\n");
+        printf("Press any key to continue...\n");
+        getchar();
+        return;
+    }
+
+    // Open the editor
+    snprintf(command, sizeof(command), "cd %s && %s .", temp_dir, editor_command);
+    endwin();  // End ncurses window before running command
+    result = system(command);
+    if (result != 0) {
         printf("Error: Could not open the editor. Ensure %s is installed and configured correctly.\n", editor_command);
         printf("Press any key to continue...\n");
         getchar();
     }
 
-    // Switch back to the original branch after editing
-    system("git checkout -"); 
+    // Remove the temporary worktree
+    snprintf(command, sizeof(command), "git worktree remove --force %s", temp_dir);
+    system(command);
+
+    // Apply the stashed changes
+    system("git stash pop");
 
     initscr();  // Restart ncurses window after command execution
     cbreak();
@@ -102,7 +125,10 @@ void view_history(git_repository *repo) {
     git_oid oid;
     git_commit *commit = NULL;
 
-    git_revwalk_new(&walker, repo);
+    if (git_revwalk_new(&walker, repo) != 0) {
+        fprintf(stderr, "Failed to create revwalker\n");
+        return;
+    }
     git_revwalk_push_head(walker);
     git_revwalk_sorting(walker, GIT_SORT_TIME);
 
@@ -112,6 +138,7 @@ void view_history(git_repository *repo) {
     FILE *logfile = fopen("commit_log.txt", "w");
     if (!logfile) {
         fprintf(stderr, "Failed to open log file\n");
+        git_revwalk_free(walker);
         return;
     }
 

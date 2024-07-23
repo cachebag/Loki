@@ -1,3 +1,7 @@
+Date: 2024-07-19, Message: Merge branch 'main' of github.com:alhakimiakrm/Loki , Full Hash: 4c91678b644a1825e4cb74eb3a6e7a557d6b3cec, Author: akrm al-hakimi
+Date: 2024-07-19, Message: Implemented check to see output is correct for commit history and if a certain code editor is installed on a users device , Full Hash: b9694697c60b3ed46444fbf42dc2f85266532596, Author: akrm al-hakimi
+Date: 2024-07-19, Message: Update README.md, Full Hash: d65d9fa53bcacf2864f15ccec1cbd207ea7d1ae1, Author: akrm (uhcrum)
+Date: 2024-07-19, Message: Update README.md, Full Hash: f7a6cbc4151c39eab5e28a65695755f7605e76f9, Author: akrm (uhcrum)
 Date: 2024-07-19, Message: Layed out commit history, rendered terminal screen and nav options , Full Hash: 64171c390585d4d174b4e15dc137ec70fe140515, Author: akrm al-hakimi
 Date: 2024-07-19, Message: Initial Commit , Full Hash: 8a0dbf6d2c14a5d643129f4e99f97c952d7f643f, Author: akrm al-hakimi
 Date: 2024-07-19, Message: Initial commit, Full Hash: e26bf4672d561ad43f3dbd856d876b107ddb95d8, Author: akrm (uhcrum)
