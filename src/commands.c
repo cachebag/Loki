@@ -36,7 +36,7 @@ int prompt_editor_selection() {
     while (1) {
         clear();
         center_text(0, "Select an Editor");
-        for (int i = 0; 3; i++) {
+        for (int i = 0; i < 3; i++) {
             if (i == row) attron(A_REVERSE);
             mvprintw(i + 2, 0, "%s", editor_names[i]);
             if (i == row) attroff(A_REVERSE);
@@ -83,10 +83,17 @@ void open_in_editor(const char *editor_command, const char *commit_hash) {
     system("git stash -u");
 
     // Create a temporary worktree
-    char temp_dir[] = "/tmp/loki_XXXXXX";
-    mkdtemp(temp_dir);
+    char temp_dir_template[] = "/tmp/loki_XXXXXX";
+    char *temp_dir = mkdtemp(temp_dir_template);
+    if (temp_dir == NULL) {
+        endwin();
+        printf("Error: Could not create temporary directory.\n");
+        printf("Press any key to continue...\n");
+        getchar();
+        return;
+    }
 
-    char command[256];
+    char command[512];
     snprintf(command, sizeof(command), "git worktree add %s %s", temp_dir, commit_hash);
     int result = system(command);
     if (result != 0) {
