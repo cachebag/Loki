@@ -1,16 +1,16 @@
 #include "../include/commands.h"
 #include <stdio.h>
 #include <ncurses.h>
-#include <time.h>
 #include <string.h>
 #include <git2.h>
 #include <stdlib.h>
 #include <unistd.h>
 
+#define MAX_MESSAGE_LENGTH 50  // Define the maximum length for the commit message
+
 typedef struct {
     char date[20];
     char message[256];
-    char hash[10];  // Abbreviated hash
     char full_hash[41];  // Full hash for internal use
     char author[256];
 } Commit;
@@ -28,17 +28,37 @@ void sanitize_message(char *message, size_t size) {
     }
 }
 
-const char *editor_names[] = {"VSCode", "Vim", "Neovim"};
-const char *editor_commands[] = {"/usr/local/bin/code", "/opt/homebrew/bin/vim", "/opt/homebrew/bin/nvim"};
+void truncate_message(char *message, size_t max_length) {
+    if (strlen(message) > max_length) {
+        message[max_length - 3] = '.';  // Add ellipsis
+        message[max_length - 2] = '.';
+        message[max_length - 1] = '.';
+        message[max_length] = '\0';  // Null-terminate the string
+    }
+}
 
-int prompt_editor_selection() {
+const char *editor_names[] = {"nano", "vim", "nvim", "code", "Other"};
+const char *default_paths[] = {"/usr/bin/nano", "/usr/bin/vim", "/usr/bin/nvim", "/usr/bin/code"};
+
+int prompt_editor_selection(char *selected_editor) {
     int ch, row = 0;
+    int max_name_length = 0;
+
+    // Find the maximum length of editor names for centering
+    for (int i = 0; i < 5; i++) {
+        int name_length = strlen(editor_names[i]);
+        if (name_length > max_name_length) {
+            max_name_length = name_length;
+        }
+    }
+
     while (1) {
         clear();
         center_text(0, "Select an Editor");
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 5; i++) {
             if (i == row) attron(A_REVERSE);
-            mvprintw(i + 2, 0, "%s", editor_names[i]);
+            int x = (COLS - strlen(editor_names[i])) / 2;
+            mvprintw(i + 2, x, "%s", editor_names[i]);
             if (i == row) attroff(A_REVERSE);
         }
         refresh();
@@ -48,37 +68,24 @@ int prompt_editor_selection() {
                 if (row > 0) row--;
                 break;
             case KEY_DOWN:
-                if (row < 2) row++;
+                if (row < 4) row++;
                 break;
             case 10:  // Enter key
-                return row;
+                if (row < 4) {
+                    snprintf(selected_editor, 256, "%s", default_paths[row]);
+                } else {
+                    echo();
+                    mvprintw(LINES / 2 + 4, (COLS - 30) / 2, "Enter the full path to your editor: ");
+                    getstr(selected_editor);
+                    noecho();
+                }
+                return 0;
         }
     }
 }
 
-int check_editor_installed(const char *editor_command) {
-    char check_command[256];
-    snprintf(check_command, sizeof(check_command), "command -v %s", editor_command);
-    printf("Running check command: %s\n", check_command); // Debug print
-    FILE *fp = popen(check_command, "r");
-    if (fp == NULL) {
-        return 0;  // popen failed
-    }
-    int found = (fgetc(fp) != EOF);
-    pclose(fp);
-    printf("Editor %s found: %d\n", editor_command, found); // Debug print
-    return found;
-}
 
 void open_in_editor(const char *editor_command, const char *commit_hash) {
-    if (!check_editor_installed(editor_command)) {
-        endwin();
-        printf("Error: %s is not installed.\n", editor_command);
-        printf("Press any key to continue...\n");
-        getchar();
-        return;
-    }
-
     // Stash local changes
     system("git stash -u");
 
@@ -127,7 +134,7 @@ void open_in_editor(const char *editor_command, const char *commit_hash) {
     keypad(stdscr, TRUE);
 }
 
-void view_history(git_repository *repo) {
+void view_history(git_repository *repo, const char *selected_editor) {
     git_revwalk *walker = NULL;
     git_oid oid;
     git_commit *commit = NULL;
@@ -139,19 +146,29 @@ void view_history(git_repository *repo) {
     git_revwalk_push_head(walker);
     git_revwalk_sorting(walker, GIT_SORT_TIME);
 
-    Commit commits[1000];
-    int count = 0;
-
-    FILE *logfile = fopen("commit_log.txt", "w");
-    if (!logfile) {
-        fprintf(stderr, "Failed to open log file\n");
+    int commit_capacity = 1000;
+    Commit *commits = malloc(commit_capacity * sizeof(Commit));
+    if (commits == NULL) {
+        fprintf(stderr, "Failed to allocate memory for commits\n");
         git_revwalk_free(walker);
         return;
     }
 
-    while (!git_revwalk_next(&oid, walker) && count < 1000) {
+    int count = 0;
+
+    while (!git_revwalk_next(&oid, walker)) {
+        if (count >= commit_capacity) {
+            commit_capacity *= 2;
+            commits = realloc(commits, commit_capacity * sizeof(Commit));
+            if (commits == NULL) {
+                fprintf(stderr, "Failed to reallocate memory for commits\n");
+                git_revwalk_free(walker);
+                return;
+            }
+        }
+
         if (git_commit_lookup(&commit, repo, &oid) < 0) {
-            fprintf(logfile, "Failed to lookup commit\n");
+            fprintf(stderr, "Failed to lookup commit\n");
             continue;
         }
 
@@ -161,19 +178,21 @@ void view_history(git_repository *repo) {
         strftime(commits[count].date, sizeof(commits[count].date), "%Y-%m-%d", tm_info);
         snprintf(commits[count].message, sizeof(commits[count].message), "%s", git_commit_message(commit));
         sanitize_message(commits[count].message, sizeof(commits[count].message));
+        truncate_message(commits[count].message, MAX_MESSAGE_LENGTH);  // Truncate message to fit the desired length
         snprintf(commits[count].full_hash, sizeof(commits[count].full_hash), "%s", git_oid_tostr_s(&oid));
-        strncpy(commits[count].hash, commits[count].full_hash, 9);  // Abbreviate hash
-        commits[count].hash[9] = '\0';  // Null terminate
         snprintf(commits[count].author, sizeof(commits[count].author), "%s", git_commit_author(commit)->name);
-
-        fprintf(logfile, "Date: %s, Message: %s, Full Hash: %s, Author: %s\n", commits[count].date, commits[count].message, commits[count].full_hash, commits[count].author);
 
         git_commit_free(commit);
         count++;
     }
 
-    fclose(logfile);
     git_revwalk_free(walker);
+
+    // Initialize color pairs for the different elements
+    init_pair(1, COLOR_RED, COLOR_BLACK);    // Hash
+    init_pair(2, COLOR_YELLOW, COLOR_BLACK); // Date
+    init_pair(3, COLOR_GREEN, COLOR_BLACK);  // Author
+    init_pair(4, COLOR_CYAN, COLOR_BLACK);   // Message
 
     initscr();
     cbreak();
@@ -187,8 +206,40 @@ void view_history(git_repository *repo) {
         center_text(1, "Up and Down arrows to move - Enter to select - Ctrl + C to end session");
 
         for (int i = 0; i < count; i++) {
+            int line_y = i + 3;
             if (i == row) attron(A_REVERSE);
-            mvprintw(i + 3, 0, "%s -- %s -- %s -- %s", commits[i].date, commits[i].message, commits[i].hash, commits[i].author);
+
+            int date_len = strlen(commits[i].date);
+            int msg_len = strlen(commits[i].message);
+            int hash_len = 9; // Abbreviated hash length
+            int author_len = strlen(commits[i].author);
+
+            int total_len = date_len + msg_len + hash_len + author_len + 10; // 10 for spaces between fields
+            int x = (COLS - total_len) / 2;
+
+            // Print date
+            attron(COLOR_PAIR(2));
+            mvprintw(line_y, x, "%s", commits[i].date);
+            attroff(COLOR_PAIR(2));
+            x += date_len + 2;
+
+            // Print message
+            attron(COLOR_PAIR(4));
+            mvprintw(line_y, x, "%s", commits[i].message);
+            attroff(COLOR_PAIR(4));
+            x += msg_len + 2;
+
+            // Print hash
+            attron(COLOR_PAIR(1));
+            mvprintw(line_y, x, "%.9s", commits[i].full_hash);
+            attroff(COLOR_PAIR(1));
+            x += hash_len + 2;
+
+            // Print author
+            attron(COLOR_PAIR(3));
+            mvprintw(line_y, x, "%s", commits[i].author);
+            attroff(COLOR_PAIR(3));
+
             if (i == row) attroff(A_REVERSE);
         }
 
@@ -203,11 +254,11 @@ void view_history(git_repository *repo) {
                 break;
             case 10:  // Enter key
                 endwin();
-                int editor_choice = prompt_editor_selection();
-                open_in_editor(editor_commands[editor_choice], commits[row].full_hash);
+                open_in_editor(selected_editor, commits[row].full_hash);
                 break;
             case 3:  // Ctrl + C to exit
                 endwin();
+                free(commits);  // Free the allocated memory
                 return;
         }
     }

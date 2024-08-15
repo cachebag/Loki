@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -I/opt/homebrew/opt/libgit2/include -Iinclude
-LDFLAGS = -L/opt/homebrew/opt/libgit2/lib -lgit2 -lncurses
+CFLAGS = -Wall $(shell pkg-config --cflags libgit2 ncurses) -Iinclude
+LDFLAGS = $(shell pkg-config --libs libgit2 ncurses)
 
 SRC = src/main.c src/commands.c
 OBJ = $(SRC:.c=.o)
@@ -13,4 +13,3 @@ $(TARGET): $(OBJ)
 
 clean:
 	rm -f $(OBJ) $(TARGET)
-
